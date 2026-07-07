@@ -37,12 +37,11 @@
             color: #2E7D32;
         }
 
-        /* 橫向防呆機制 */
         #orientation-warning { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100dvh; background: #0f172a; color: white; z-index: 9999; flex-direction: column; justify-content: center; align-items: center; font-size: 1.5em; text-align: center; padding: 20px; box-sizing: border-box; }
         @media (orientation: portrait) { #orientation-warning { display: flex; } }
 
         /* ==========================================
-           畫布與卡片核心設定 (90%瘦身版)
+           畫布與卡片核心設定
            ========================================== */
         body, html { overflow: hidden; -webkit-user-select: none; user-select: none; }
         #canvas { touch-action: none; }
@@ -60,19 +59,16 @@
             flex-shrink: 0;
         }
 
-        /* 概念卡：90% 比例 (126x44) */
+        /* 概念卡基礎設定，長寬由 JS 動態注入 80% / 60% 尺寸 */
         .concept-card-canvas {
             position: absolute !important;
-            width: 126px; height: 44px;
-            z-index: 30; /* 字卡圖層高於連線 */
+            z-index: 30;
             translate: var(--x, 0px) var(--y, 0px);
-            font-size: 14px !important;
             touch-action: none;
         }
         
         .card-active { z-index: 100 !important; box-shadow: 0 15px 30px rgba(0,0,0,0.3); }
         .card-selected { outline: 3px solid #3b82f6; outline-offset: 2px; }
-
     </style>
 </head>
 <body class="bg-slate-50 h-[100dvh] w-screen overflow-hidden flex flex-col font-sans select-none overscroll-none text-slate-800">
@@ -102,7 +98,7 @@
         
         <div id="sidebar" class="w-[240px] bg-white border-r border-slate-200 p-2 flex flex-col shrink-0 z-10 shadow-sm min-h-0 relative">
             <h2 class="text-[11px] font-bold text-slate-400 mb-2 uppercase tracking-tighter text-center flex-none">神經節點卡</h2>
-            <div id="card-pool" class="grid grid-cols-2 gap-2 overflow-y-auto pb-10 overscroll-contain px-1 content-start"></div>
+            <div id="card-pool" class="grid grid-cols-2 gap-2 overflow-y-auto pb-10 overscroll-contain px-1 content-start items-center justify-items-center"></div>
         </div>
 
         <div id="canvas" class="flex-1 relative z-10 canvas-bg bg-slate-50">
@@ -160,10 +156,6 @@
             ]
         };
 
-        // 卡片尺寸常數 (90%比例 126x44)
-        const CARD_W = 126; 
-        const CARD_H = 44;
-
         let connections = []; 
         let cardDataMap = {}; 
         let selectedCardId = null; 
@@ -184,7 +176,15 @@
                 card.id = id;
                 card.dataset.name = obj.name;
                 
-                card.className = `${obj.bg} border rounded-md shadow-sm text-[13px] font-bold flex items-center justify-center h-[44px] w-full shrink-0 cursor-grab`;
+                // 動態判斷瘦身比例：60% 或 80%
+                const isSmall = ["大腦", "小腦", "腦幹"].includes(obj.name);
+                const w = isSmall ? 84 : 112;
+                const h = isSmall ? 29 : 38;
+                const fSize = isSmall ? 'text-[10px]' : 'text-[12px]';
+
+                card.className = `${obj.bg} border rounded-md shadow-sm ${fSize} font-bold flex items-center justify-center shrink-0 cursor-grab`;
+                card.style.width = '100%'; // 在側欄中自適應 Grid，拉出後定寬
+                card.style.height = `${h}px`;
                 card.innerText = obj.name;
                 
                 card.addEventListener('mousedown', startDrag);
@@ -193,7 +193,7 @@
                 
                 pool.appendChild(card);
                 
-                cardDataMap[id] = { inCanvas: false, name: obj.name };
+                cardDataMap[id] = { inCanvas: false, name: obj.name, width: w, height: h };
             });
         }
 
@@ -209,67 +209,93 @@
             const canvasRect = canvas.getBoundingClientRect();
             const sidebarRect = document.getElementById('sidebar').getBoundingClientRect();
             
+            // 加入防震機制
+            card.dataset.moved = "false";
+            let startX = clientX;
+            let startY = clientY;
+            let dragOffsetX, dragOffsetY;
+
             if (!data.inCanvas) {
+                // 從側邊欄初次拉出，產生佔位符
                 const ph = document.createElement('div');
                 ph.id = `ph-${card.id}`;
                 ph.className = 'pool-placeholder';
-                ph.style.height = '44px';
+                ph.style.height = `${data.height}px`;
                 card.parentNode.insertBefore(ph, card);
 
                 data.inCanvas = true; 
-                card.classList.remove('h-[44px]', 'w-full', 'shrink-0'); 
+                card.classList.remove('w-full', 'shrink-0'); 
+                card.style.width = `${data.width}px`;
                 card.classList.add('concept-card-canvas');
                 canvas.appendChild(card);
+                
+                // 初次拉出時，讓卡片中心秒黏指尖
+                dragOffsetX = data.width / 2;
+                dragOffsetY = data.height / 2;
+
+                data.x = clientX - canvasRect.left - dragOffsetX;
+                data.y = clientY - canvasRect.top - dragOffsetY;
+                card.style.setProperty('--x', `${data.x}px`);
+                card.style.setProperty('--y', `${data.y}px`);
+                
+                // 標記為已拖曳，避免與點擊連線衝突
+                card.dataset.moved = "true";
+            } else {
+                // 已在畫布中：計算精確的相對抓取點，防止卡片閃跳
+                const cardLeftRelativeToViewport = canvasRect.left + data.x;
+                const cardTopRelativeToViewport = canvasRect.top + data.y;
+                dragOffsetX = clientX - cardLeftRelativeToViewport;
+                dragOffsetY = clientY - cardTopRelativeToViewport;
             }
 
             card.classList.add('card-active');
-            
-            const offsetX = CARD_W / 2;
-            const offsetY = CARD_H / 2;
-
-            data.x = clientX - canvasRect.left - offsetX;
-            data.y = clientY - canvasRect.top - offsetY;
-            card.style.setProperty('--x', `${data.x}px`);
-            card.style.setProperty('--y', `${data.y}px`);
-
-            updateAllLines();
 
             function doDrag(ev) {
                 if (!card) return;
                 const mX = ev.touches ? ev.touches[0].clientX : ev.clientX;
                 const mY = ev.touches ? ev.touches[0].clientY : ev.clientY;
                 
-                data.x = mX - canvasRect.left - offsetX;
-                data.y = mY - canvasRect.top - offsetY;
+                // 超過 5px 才判定為真實拖曳，解決防震與靈敏度問題
+                if (Math.abs(mX - startX) > 5 || Math.abs(mY - startY) > 5) {
+                    card.dataset.moved = "true";
+                }
 
-                card.style.setProperty('--x', `${data.x}px`);
-                card.style.setProperty('--y', `${data.y}px`);
-                updateAllLines();
+                if (card.dataset.moved === "true") {
+                    data.x = mX - canvasRect.left - dragOffsetX;
+                    data.y = mY - canvasRect.top - dragOffsetY;
+                    card.style.setProperty('--x', `${data.x}px`);
+                    card.style.setProperty('--y', `${data.y}px`);
+                    updateAllLines();
+                }
             }
 
             function stopDrag(ev) {
                 card.classList.remove('card-active');
                 const releaseX = ev.changedTouches ? ev.changedTouches[0].clientX : ev.clientX;
                 
-                if (releaseX < sidebarRect.right) {
-                    data.inCanvas = false;
-                    card.classList.remove('concept-card-canvas', 'card-selected');
-                    card.classList.add('h-[44px]', 'w-full', 'shrink-0');
-                    card.style.translate = '';
-                    
-                    if (selectedCardId === card.id) selectedCardId = null;
+                if (card.dataset.moved === "true") {
+                    if (releaseX < sidebarRect.right) {
+                        // 拖回側邊欄，復原佔位
+                        data.inCanvas = false;
+                        card.classList.remove('concept-card-canvas', 'card-selected');
+                        card.classList.add('w-full', 'shrink-0');
+                        card.style.width = '100%';
+                        card.style.translate = '';
+                        
+                        if (selectedCardId === card.id) selectedCardId = null;
 
-                    const ph = document.getElementById(`ph-${card.id}`);
-                    if (ph) {
-                        ph.parentNode.replaceChild(card, ph);
-                    } else {
-                        document.getElementById('card-pool').appendChild(card);
+                        const ph = document.getElementById(`ph-${card.id}`);
+                        if (ph) {
+                            ph.parentNode.replaceChild(card, ph);
+                        } else {
+                            document.getElementById('card-pool').appendChild(card);
+                        }
+
+                        connections = connections.filter(c => c.fromId !== card.id && c.toId !== card.id);
                     }
-
-                    connections = connections.filter(c => c.fromId !== card.id && c.toId !== card.id);
+                    updateAllLines();
                 }
-
-                updateAllLines();
+                
                 document.removeEventListener('mousemove', doDrag);
                 document.removeEventListener('mouseup', stopDrag);
                 document.removeEventListener('touchmove', doDrag);
@@ -283,6 +309,12 @@
         }
 
         function handleCardClick(e) {
+            // 如果剛才是拖曳動作，立刻阻斷避免誤觸連線
+            if (e.currentTarget.dataset.moved === "true") {
+                e.stopPropagation();
+                return;
+            }
+
             e.stopPropagation(); 
             const id = e.currentTarget.id;
             
@@ -323,9 +355,11 @@
                 const t = cardDataMap[conn.toId];
                 if (!f || !t || !f.inCanvas || !t.inCanvas) return;
 
-                // 純粹的幾何中心點對齊 (Z-index遮蔽法)
-                const x1 = f.x + CARD_W/2, y1 = f.y + CARD_H/2;
-                const x2 = t.x + CARD_W/2, y2 = t.y + CARD_H/2;
+                // 直接取字卡的幾何中心點，不留邊距
+                const x1 = f.x + f.width / 2;
+                const y1 = f.y + f.height / 2;
+                const x2 = t.x + t.width / 2;
+                const y2 = t.y + t.height / 2;
 
                 const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
                 const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
@@ -369,7 +403,7 @@
             
             const scorePercentage = (correct / totalRequired) * 100;
 
-            if (!error && scorePercentage >= 80) {
+            if (!error && scorePercentage >= 100) {
                 document.getElementById('feedback-modal').classList.remove('hidden');
             } else {
                 alert("⚠️ 檢查重點：\n1. 是否有多餘或錯誤的階層連線（紅色標示）？\n2. 是否還有遺漏的系統分支尚未建立？\n（綠色代表階層關聯正確，繼續加油！）");
