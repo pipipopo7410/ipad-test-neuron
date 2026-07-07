@@ -42,15 +42,16 @@
         @media (orientation: portrait) { #orientation-warning { display: flex; } }
 
         /* ==========================================
-           畫布與卡片核心設定 (極致瘦身版)
+           畫布與卡片核心設定 (90%瘦身版)
            ========================================== */
         body, html { overflow: hidden; -webkit-user-select: none; user-select: none; }
         #canvas { touch-action: none; }
         
         .canvas-bg { background-image: radial-gradient(#e2e8f0 1.5px, transparent 1.5px); background-size: 24px 24px; }
-        #svg-layer { z-index: 45; }
         
-        /* 側欄拖曳佔位符 */
+        /* 將 SVG 連線圖層沉降至字卡之下 */
+        #svg-layer { z-index: 20; }
+        
         .pool-placeholder {
             border: 2px dashed #cbd5e1;
             background-color: #f8fafc;
@@ -59,11 +60,11 @@
             flex-shrink: 0;
         }
 
-        /* 概念卡：瘦身為 96x46 */
+        /* 概念卡：90% 比例 (126x44) */
         .concept-card-canvas {
             position: absolute !important;
-            width: 96px; height: 46px;
-            z-index: 30;
+            width: 126px; height: 44px;
+            z-index: 30; /* 字卡圖層高於連線 */
             translate: var(--x, 0px) var(--y, 0px);
             font-size: 14px !important;
             touch-action: none;
@@ -104,20 +105,8 @@
             <div id="card-pool" class="grid grid-cols-2 gap-2 overflow-y-auto pb-10 overscroll-contain px-1 content-start"></div>
         </div>
 
-        <div id="canvas" class="flex-1 relative z-20 canvas-bg bg-slate-50">
-            <svg id="svg-layer" class="absolute inset-0 pointer-events-none w-full h-full">
-                <defs>
-                    <marker id="arrow-gray" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                        <path d="M 0 0 L 10 5 L 0 10 z" fill="#94a3b8"/>
-                    </marker>
-                    <marker id="arrow-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                        <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444"/>
-                    </marker>
-                    <marker id="arrow-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                        <path d="M 0 0 L 10 5 L 0 10 z" fill="#10b981"/>
-                    </marker>
-                </defs>
-            </svg>
+        <div id="canvas" class="flex-1 relative z-10 canvas-bg bg-slate-50">
+            <svg id="svg-layer" class="absolute inset-0 pointer-events-none w-full h-full"></svg>
         </div>
     </main>
 
@@ -131,7 +120,6 @@
     </div>
 
     <script>
-        // 防止畫布在平板上拖曳時觸發網頁捲動，但放行側邊欄的滾動
         document.addEventListener('touchmove', function(e) {
             if (!e.target.closest('.overscroll-contain')) {
                 e.preventDefault();
@@ -172,9 +160,9 @@
             ]
         };
 
-        // 卡片尺寸常數 (瘦身版 96x46)
-        const CARD_W = 96; 
-        const CARD_H = 46;
+        // 卡片尺寸常數 (90%比例 126x44)
+        const CARD_W = 126; 
+        const CARD_H = 44;
 
         let connections = []; 
         let cardDataMap = {}; 
@@ -186,7 +174,7 @@
             connections = []; 
             cardDataMap = {}; 
             selectedCardId = null; 
-            document.getElementById('svg-layer').innerHTML = document.getElementById('svg-layer').querySelector('defs').outerHTML;
+            document.getElementById('svg-layer').innerHTML = '';
 
             const shuffledCards = [...unitData.cards].sort(() => Math.random() - 0.5);
             
@@ -196,8 +184,7 @@
                 card.id = id;
                 card.dataset.name = obj.name;
                 
-                // 側欄外觀
-                card.className = `${obj.bg} border rounded-md shadow-sm text-xs font-bold flex items-center justify-center h-[46px] w-full shrink-0 cursor-grab`;
+                card.className = `${obj.bg} border rounded-md shadow-sm text-[13px] font-bold flex items-center justify-center h-[44px] w-full shrink-0 cursor-grab`;
                 card.innerText = obj.name;
                 
                 card.addEventListener('mousedown', startDrag);
@@ -218,32 +205,28 @@
             const clientX = e.touches ? e.touches[0].clientX : e.clientX;
             const clientY = e.touches ? e.touches[0].clientY : e.clientY;
             
-            const origRect = card.getBoundingClientRect();
             const canvas = document.getElementById('canvas');
             const canvasRect = canvas.getBoundingClientRect();
             const sidebarRect = document.getElementById('sidebar').getBoundingClientRect();
             
-            // 初次拉出 -> 產生佔位符防跳動
             if (!data.inCanvas) {
                 const ph = document.createElement('div');
                 ph.id = `ph-${card.id}`;
                 ph.className = 'pool-placeholder';
-                ph.style.height = '46px';
+                ph.style.height = '44px';
                 card.parentNode.insertBefore(ph, card);
 
                 data.inCanvas = true; 
-                card.classList.remove('h-[46px]', 'w-full', 'shrink-0'); 
+                card.classList.remove('h-[44px]', 'w-full', 'shrink-0'); 
                 card.classList.add('concept-card-canvas');
                 canvas.appendChild(card);
             }
 
             card.classList.add('card-active');
             
-            // 設定滑鼠/手指置中
             const offsetX = CARD_W / 2;
             const offsetY = CARD_H / 2;
 
-            // 秒黏手指
             data.x = clientX - canvasRect.left - offsetX;
             data.y = clientY - canvasRect.top - offsetY;
             card.style.setProperty('--x', `${data.x}px`);
@@ -268,11 +251,10 @@
                 card.classList.remove('card-active');
                 const releaseX = ev.changedTouches ? ev.changedTouches[0].clientX : ev.clientX;
                 
-                // 拖回側邊欄 -> 歸位並切斷所有連線
                 if (releaseX < sidebarRect.right) {
                     data.inCanvas = false;
                     card.classList.remove('concept-card-canvas', 'card-selected');
-                    card.classList.add('h-[46px]', 'w-full', 'shrink-0');
+                    card.classList.add('h-[44px]', 'w-full', 'shrink-0');
                     card.style.translate = '';
                     
                     if (selectedCardId === card.id) selectedCardId = null;
@@ -284,7 +266,6 @@
                         document.getElementById('card-pool').appendChild(card);
                     }
 
-                    // 刪除相關連線
                     connections = connections.filter(c => c.fromId !== card.id && c.toId !== card.id);
                 }
 
@@ -301,12 +282,10 @@
             document.addEventListener('touchend', stopDrag);
         }
 
-        // 點擊卡片建立連線邏輯
         function handleCardClick(e) {
             e.stopPropagation(); 
             const id = e.currentTarget.id;
             
-            // 必須在畫布內才能點擊連線
             if (!cardDataMap[id].inCanvas) return;
             
             if (!selectedCardId) { 
@@ -323,8 +302,6 @@
         }
 
         function toggleConnection(fromId, toId) {
-            // 在神經單元中，連線是「雙向無差別檢測」，但在繪圖時會畫出單向箭頭
-            // 為了方便學生，如果他重複點擊已經存在的線（不論正反向），就取消該線
             const idx = connections.findIndex(c => 
                 (c.fromId === fromId && c.toId === toId) || (c.fromId === toId && c.toId === fromId)
             );
@@ -339,44 +316,26 @@
 
         function updateAllLines() {
             const svg = document.getElementById('svg-layer');
-            const defs = svg.querySelector('defs').outerHTML;
-            svg.innerHTML = defs;
+            svg.innerHTML = ''; 
 
             connections.forEach(conn => {
                 const f = cardDataMap[conn.fromId]; 
                 const t = cardDataMap[conn.toId];
                 if (!f || !t || !f.inCanvas || !t.inCanvas) return;
 
-                // 算兩張卡的中心點
+                // 純粹的幾何中心點對齊 (Z-index遮蔽法)
                 const x1 = f.x + CARD_W/2, y1 = f.y + CARD_H/2;
                 const x2 = t.x + CARD_W/2, y2 = t.y + CARD_H/2;
-
-                const dx = x2 - x1, dy = y2 - y1;
-                const dist = Math.hypot(dx, dy) || 1;
-                
-                // 箭頭退縮距離，配合卡片尺寸 96x46
-                const shrink = 45; 
-                let lx1 = x1, ly1 = y1, lx2 = x2, ly2 = y2;
-                
-                if (dist > shrink * 2) {
-                    lx1 = x1 + (dx / dist) * shrink; 
-                    ly1 = y1 + (dy / dist) * shrink;
-                    lx2 = x2 - (dx / dist) * shrink; 
-                    ly2 = y2 - (dy / dist) * shrink;
-                }
 
                 const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
                 const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
                 
-                line.setAttribute('x1', lx1); 
-                line.setAttribute('y1', ly1);
-                line.setAttribute('x2', lx2); 
-                line.setAttribute('y2', ly2);
+                line.setAttribute('x1', x1); 
+                line.setAttribute('y1', y1);
+                line.setAttribute('x2', x2); 
+                line.setAttribute('y2', y2);
                 line.setAttribute('stroke', conn.status === 'green' ? '#10b981' : (conn.status === 'red' ? '#ef4444' : '#94a3b8'));
-                line.setAttribute('stroke-width', '2.5');
-                
-                // 神經單元加入箭頭標示階層流向
-                line.setAttribute('marker-end', `url(#arrow-${conn.status})`);
+                line.setAttribute('stroke-width', '3.5');
                 line.id = `line-${conn.id}`;
                 
                 group.appendChild(line);
@@ -393,7 +352,6 @@
                 const fN = cardDataMap[conn.fromId].name;
                 const tN = cardDataMap[conn.toId].name;
                 
-                // 神經階層容許正反向拉線都能給對 (因為階層關聯是雙向的)
                 const isValid = unitData.validRelations.some(r => 
                     (r.from === fN && r.to === tN) || (r.from === tN && r.to === fN)
                 );
@@ -421,7 +379,6 @@
         function resetCanvas() { if(confirm("確定要重設所有進度？")) initGame(); }
         function closeFeedback() { document.getElementById('feedback-modal').classList.add('hidden'); }
         
-        // 點擊空白處取消選取
         document.getElementById('canvas').addEventListener('click', () => {
             if (selectedCardId !== null) {
                 const card = document.getElementById(selectedCardId);
