@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no">
+    <title>🎯 神經系統：概念圖練習</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* ==========================================
+           全域導覽列
+           ========================================== */
+        #nav-tabs-bar {
+            display: flex;
+            background: #2E7D32;
+            padding: 0 15px;
+            align-items: center;
+            gap: 10px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+            height: 44px;
+            box-sizing: border-box;
+            z-index: 999;
+            width: 100%;
+            flex-shrink: 0;
+        }
+        .nav-tab-btn {
+            padding: 6px 14px;
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-weight: bold;
+            font-size: 0.9em;
+            cursor: pointer;
+        }
+        .nav-tab-btn.active {
+            background: white;
+            color: #2E7D32;
+        }
+
+        /* 橫向防呆機制 */
+        #orientation-warning { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100dvh; background: #0f172a; color: white; z-index: 9999; flex-direction: column; justify-content: center; align-items: center; font-size: 1.5em; text-align: center; padding: 20px; box-sizing: border-box; }
+        @media (orientation: portrait) { #orientation-warning { display: flex; } }
+
+        /* ==========================================
+           畫布與卡片核心設定 (極致瘦身版)
+           ========================================== */
+        body, html { overflow: hidden; -webkit-user-select: none; user-select: none; }
+        #canvas { touch-action: none; }
+        
+        .canvas-bg { background-image: radial-gradient(#e2e8f0 1.5px, transparent 1.5px); background-size: 24px 24px; }
+        #svg-layer { z-index: 45; }
+        
+        /* 側欄拖曳佔位符 */
+        .pool-placeholder {
+            border: 2px dashed #cbd5e1;
+            background-color: #f8fafc;
+            border-radius: 0.375rem;
+            width: 100%;
+            flex-shrink: 0;
+        }
+
+        /* 概念卡：瘦身為 96x46 */
+        .concept-card-canvas {
+            position: absolute !important;
+            width: 96px; height: 46px;
+            z-index: 30;
+            translate: var(--x, 0px) var(--y, 0px);
+            font-size: 14px !important;
+            touch-action: none;
+        }
+        
+        .card-active { z-index: 100 !important; box-shadow: 0 15px 30px rgba(0,0,0,0.3); }
+        .card-selected { outline: 3px solid #3b82f6; outline-offset: 2px; }
+
+    </style>
+</head>
+<body class="bg-slate-50 h-[100dvh] w-screen overflow-hidden flex flex-col font-sans select-none overscroll-none text-slate-800">
+
+    <div id="orientation-warning" class="font-sans tracking-wider">
+        🔄<br><br>請將裝置旋轉為<b class="text-rose-400 mx-1">橫向模式</b>以進行課程互動。
+    </div>
+
+    <div id="nav-tabs-bar">
+        <button class="nav-tab-btn">酵素</button>
+        <button class="nav-tab-btn">光合作用</button>
+        <button class="nav-tab-btn">循環</button>
+        <button class="nav-tab-btn active">神經</button>
+        <button class="nav-tab-btn">血糖</button>
+        <button class="nav-tab-btn">排氨</button>
+    </div>
+
+    <header class="flex-none h-[56px] px-6 bg-white border-b border-slate-200 shadow-sm flex justify-between items-center z-10">
+        <h1 class="text-xl font-bold text-slate-800">🎯 神經系統：概念圖練習</h1>
+        <div class="flex space-x-3">
+            <button onclick="checkAnswers()" class="bg-emerald-500 hover:bg-emerald-600 text-white font-medium px-5 py-1.5 rounded-lg shadow-sm transition text-sm">檢查架構</button>
+            <button onclick="resetCanvas()" class="border border-slate-300 hover:bg-slate-50 text-slate-600 font-medium px-4 py-1.5 rounded-lg transition text-sm">重設畫布</button>
+        </div>
+    </header>
+
+    <main class="flex flex-1 flex-row w-full max-w-[1600px] mx-auto min-h-0 relative">
+        
+        <div id="sidebar" class="w-[240px] bg-white border-r border-slate-200 p-2 flex flex-col shrink-0 z-10 shadow-sm min-h-0 relative">
+            <h2 class="text-[11px] font-bold text-slate-400 mb-2 uppercase tracking-tighter text-center flex-none">神經節點卡</h2>
+            <div id="card-pool" class="grid grid-cols-2 gap-2 overflow-y-auto pb-10 overscroll-contain px-1 content-start"></div>
+        </div>
+
+        <div id="canvas" class="flex-1 relative z-20 canvas-bg bg-slate-50">
+            <svg id="svg-layer" class="absolute inset-0 pointer-events-none w-full h-full">
+                <defs>
+                    <marker id="arrow-gray" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                        <path d="M 0 0 L 10 5 L 0 10 z" fill="#94a3b8"/>
+                    </marker>
+                    <marker id="arrow-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                        <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444"/>
+                    </marker>
+                    <marker id="arrow-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                        <path d="M 0 0 L 10 5 L 0 10 z" fill="#10b981"/>
+                    </marker>
+                </defs>
+            </svg>
+        </div>
+    </main>
+
+    <div id="feedback-modal" class="hidden fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-sm w-full p-6 text-center shadow-xl border border-slate-100">
+            <div class="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl">✓</div>
+            <h3 class="text-xl font-bold mb-2 text-slate-800">太棒了！思考非常嚴謹！</h3>
+            <p id="feedback-text" class="text-slate-500 text-sm mb-6">你成功梳理了神經系統的階層關係，邏輯完全正確！正確關聯已為你點亮綠燈。</p>
+            <button onclick="closeFeedback()" class="w-full bg-slate-800 text-white font-medium py-2 rounded-xl hover:bg-slate-900 transition">關閉挑戰</button>
+        </div>
+    </div>
+
+    <script>
+        // 防止畫布在平板上拖曳時觸發網頁捲動，但放行側邊欄的滾動
+        document.addEventListener('touchmove', function(e) {
+            if (!e.target.closest('.overscroll-contain')) {
+                e.preventDefault();
+            }
+        }, { passive: false });
+
+        const unitData = {
+            id: "nervous-system",
+            title: "神經系統",
+            cards: [
+                { name: "神經系統", bg: "bg-indigo-100 border-indigo-300 text-indigo-900" },
+                { name: "中樞神經", bg: "bg-purple-100 border-purple-300 text-purple-900" },
+                { name: "周圍神經", bg: "bg-amber-100 border-amber-300 text-amber-900" },
+                { name: "腦",     bg: "bg-fuchsia-100 border-fuchsia-300 text-fuchsia-900" },
+                { name: "脊髓",   bg: "bg-pink-100 border-pink-300 text-pink-900" },
+                { name: "腦神經", bg: "bg-orange-100 border-orange-300 text-orange-900" },
+                { name: "脊神經", bg: "bg-yellow-100 border-yellow-300 text-yellow-900" },
+                { name: "大腦",   bg: "bg-sky-100 border-sky-300 text-sky-900" },
+                { name: "小腦",   bg: "bg-emerald-100 border-emerald-300 text-emerald-900" },
+                { name: "腦幹",   bg: "bg-teal-100 border-teal-300 text-teal-900" },
+                { name: "感覺神經", bg: "bg-rose-100 border-rose-300 text-rose-900" },
+                { name: "運動神經", bg: "bg-cyan-100 border-cyan-300 text-cyan-900" }
+            ],
+            validRelations: [
+                { from: "神經系統", to: "中樞神經" },
+                { from: "神經系統", to: "周圍神經" },
+                { from: "中樞神經", to: "腦" },
+                { from: "中樞神經", to: "脊髓" },
+                { from: "腦", to: "大腦" },
+                { from: "腦", to: "小腦" },
+                { from: "腦", to: "腦幹" },
+                { from: "周圍神經", to: "腦神經" },
+                { from: "周圍神經", to: "脊神經" },
+                { from: "腦神經", to: "感覺神經" },
+                { from: "腦神經", to: "運動神經" },
+                { from: "脊神經", to: "感覺神經" },
+                { from: "脊神經", to: "運動神經" }
+            ]
+        };
+
+        // 卡片尺寸常數 (瘦身版 96x46)
+        const CARD_W = 96; 
+        const CARD_H = 46;
+
+        let connections = []; 
+        let cardDataMap = {}; 
+        let selectedCardId = null; 
+
+        function initGame() {
+            const pool = document.getElementById('card-pool');
+            pool.innerHTML = '';
+            connections = []; 
+            cardDataMap = {}; 
+            selectedCardId = null; 
+            document.getElementById('svg-layer').innerHTML = document.getElementById('svg-layer').querySelector('defs').outerHTML;
+
+            const shuffledCards = [...unitData.cards].sort(() => Math.random() - 0.5);
+            
+            shuffledCards.forEach((obj, index) => {
+                const id = `card-${index}`;
+                const card = document.createElement('div');
+                card.id = id;
+                card.dataset.name = obj.name;
+                
+                // 側欄外觀
+                card.className = `${obj.bg} border rounded-md shadow-sm text-xs font-bold flex items-center justify-center h-[46px] w-full shrink-0 cursor-grab`;
+                card.innerText = obj.name;
+                
+                card.addEventListener('mousedown', startDrag);
+                card.addEventListener('touchstart', startDrag, {passive:false});
+                card.addEventListener('click', handleCardClick);
+                
+                pool.appendChild(card);
+                
+                cardDataMap[id] = { inCanvas: false, name: obj.name };
+            });
+        }
+
+        function startDrag(e) {
+            e.stopPropagation();
+            let card = e.currentTarget;
+            let data = cardDataMap[card.id];
+            
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            
+            const origRect = card.getBoundingClientRect();
+            const canvas = document.getElementById('canvas');
+            const canvasRect = canvas.getBoundingClientRect();
+            const sidebarRect = document.getElementById('sidebar').getBoundingClientRect();
+            
+            // 初次拉出 -> 產生佔位符防跳動
+            if (!data.inCanvas) {
+                const ph = document.createElement('div');
+                ph.id = `ph-${card.id}`;
+                ph.className = 'pool-placeholder';
+                ph.style.height = '46px';
+                card.parentNode.insertBefore(ph, card);
+
+                data.inCanvas = true; 
+                card.classList.remove('h-[46px]', 'w-full', 'shrink-0'); 
+                card.classList.add('concept-card-canvas');
+                canvas.appendChild(card);
+            }
+
+            card.classList.add('card-active');
+            
+            // 設定滑鼠/手指置中
+            const offsetX = CARD_W / 2;
+            const offsetY = CARD_H / 2;
+
+            // 秒黏手指
+            data.x = clientX - canvasRect.left - offsetX;
+            data.y = clientY - canvasRect.top - offsetY;
+            card.style.setProperty('--x', `${data.x}px`);
+            card.style.setProperty('--y', `${data.y}px`);
+
+            updateAllLines();
+
+            function doDrag(ev) {
+                if (!card) return;
+                const mX = ev.touches ? ev.touches[0].clientX : ev.clientX;
+                const mY = ev.touches ? ev.touches[0].clientY : ev.clientY;
+                
+                data.x = mX - canvasRect.left - offsetX;
+                data.y = mY - canvasRect.top - offsetY;
+
+                card.style.setProperty('--x', `${data.x}px`);
+                card.style.setProperty('--y', `${data.y}px`);
+                updateAllLines();
+            }
+
+            function stopDrag(ev) {
+                card.classList.remove('card-active');
+                const releaseX = ev.changedTouches ? ev.changedTouches[0].clientX : ev.clientX;
+                
+                // 拖回側邊欄 -> 歸位並切斷所有連線
+                if (releaseX < sidebarRect.right) {
+                    data.inCanvas = false;
+                    card.classList.remove('concept-card-canvas', 'card-selected');
+                    card.classList.add('h-[46px]', 'w-full', 'shrink-0');
+                    card.style.translate = '';
+                    
+                    if (selectedCardId === card.id) selectedCardId = null;
+
+                    const ph = document.getElementById(`ph-${card.id}`);
+                    if (ph) {
+                        ph.parentNode.replaceChild(card, ph);
+                    } else {
+                        document.getElementById('card-pool').appendChild(card);
+                    }
+
+                    // 刪除相關連線
+                    connections = connections.filter(c => c.fromId !== card.id && c.toId !== card.id);
+                }
+
+                updateAllLines();
+                document.removeEventListener('mousemove', doDrag);
+                document.removeEventListener('mouseup', stopDrag);
+                document.removeEventListener('touchmove', doDrag);
+                document.removeEventListener('touchend', stopDrag);
+            }
+            
+            document.addEventListener('mousemove', doDrag);
+            document.addEventListener('mouseup', stopDrag);
+            document.addEventListener('touchmove', doDrag, {passive:false});
+            document.addEventListener('touchend', stopDrag);
+        }
+
+        // 點擊卡片建立連線邏輯
+        function handleCardClick(e) {
+            e.stopPropagation(); 
+            const id = e.currentTarget.id;
+            
+            // 必須在畫布內才能點擊連線
+            if (!cardDataMap[id].inCanvas) return;
+            
+            if (!selectedCardId) { 
+                selectedCardId = id; 
+                e.currentTarget.classList.add('card-selected'); 
+            } else { 
+                if (selectedCardId !== id) {
+                    toggleConnection(selectedCardId, id);
+                }
+                const prevCard = document.getElementById(selectedCardId);
+                if (prevCard) prevCard.classList.remove('card-selected'); 
+                selectedCardId = null; 
+            }
+        }
+
+        function toggleConnection(fromId, toId) {
+            // 在神經單元中，連線是「雙向無差別檢測」，但在繪圖時會畫出單向箭頭
+            // 為了方便學生，如果他重複點擊已經存在的線（不論正反向），就取消該線
+            const idx = connections.findIndex(c => 
+                (c.fromId === fromId && c.toId === toId) || (c.fromId === toId && c.toId === fromId)
+            );
+            
+            if (idx > -1) {
+                connections.splice(idx, 1);
+            } else {
+                connections.push({ id: `conn-${Date.now()}`, fromId, toId, status: 'gray' });
+            }
+            updateAllLines();
+        }
+
+        function updateAllLines() {
+            const svg = document.getElementById('svg-layer');
+            const defs = svg.querySelector('defs').outerHTML;
+            svg.innerHTML = defs;
+
+            connections.forEach(conn => {
+                const f = cardDataMap[conn.fromId]; 
+                const t = cardDataMap[conn.toId];
+                if (!f || !t || !f.inCanvas || !t.inCanvas) return;
+
+                // 算兩張卡的中心點
+                const x1 = f.x + CARD_W/2, y1 = f.y + CARD_H/2;
+                const x2 = t.x + CARD_W/2, y2 = t.y + CARD_H/2;
+
+                const dx = x2 - x1, dy = y2 - y1;
+                const dist = Math.hypot(dx, dy) || 1;
+                
+                // 箭頭退縮距離，配合卡片尺寸 96x46
+                const shrink = 45; 
+                let lx1 = x1, ly1 = y1, lx2 = x2, ly2 = y2;
+                
+                if (dist > shrink * 2) {
+                    lx1 = x1 + (dx / dist) * shrink; 
+                    ly1 = y1 + (dy / dist) * shrink;
+                    lx2 = x2 - (dx / dist) * shrink; 
+                    ly2 = y2 - (dy / dist) * shrink;
+                }
+
+                const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                
+                line.setAttribute('x1', lx1); 
+                line.setAttribute('y1', ly1);
+                line.setAttribute('x2', lx2); 
+                line.setAttribute('y2', ly2);
+                line.setAttribute('stroke', conn.status === 'green' ? '#10b981' : (conn.status === 'red' ? '#ef4444' : '#94a3b8'));
+                line.setAttribute('stroke-width', '2.5');
+                
+                // 神經單元加入箭頭標示階層流向
+                line.setAttribute('marker-end', `url(#arrow-${conn.status})`);
+                line.id = `line-${conn.id}`;
+                
+                group.appendChild(line);
+                svg.appendChild(group);
+            });
+        }
+
+        function checkAnswers() {
+            let correct = 0; 
+            let error = false;
+            const totalRequired = unitData.validRelations.length;
+
+            connections.forEach(conn => {
+                const fN = cardDataMap[conn.fromId].name;
+                const tN = cardDataMap[conn.toId].name;
+                
+                // 神經階層容許正反向拉線都能給對 (因為階層關聯是雙向的)
+                const isValid = unitData.validRelations.some(r => 
+                    (r.from === fN && r.to === tN) || (r.from === tN && r.to === fN)
+                );
+                
+                if (isValid) {
+                    conn.status = 'green'; 
+                    correct++;
+                } else {
+                    conn.status = 'red'; 
+                    error = true;
+                }
+            });
+            
+            updateAllLines();
+            
+            const scorePercentage = (correct / totalRequired) * 100;
+
+            if (!error && scorePercentage >= 80) {
+                document.getElementById('feedback-modal').classList.remove('hidden');
+            } else {
+                alert("⚠️ 檢查重點：\n1. 是否有多餘或錯誤的階層連線（紅色標示）？\n2. 是否還有遺漏的系統分支尚未建立？\n（綠色代表階層關聯正確，繼續加油！）");
+            }
+        }
+
+        function resetCanvas() { if(confirm("確定要重設所有進度？")) initGame(); }
+        function closeFeedback() { document.getElementById('feedback-modal').classList.add('hidden'); }
+        
+        // 點擊空白處取消選取
+        document.getElementById('canvas').addEventListener('click', () => {
+            if (selectedCardId !== null) {
+                const card = document.getElementById(selectedCardId);
+                if (card) card.classList.remove('card-selected');
+                selectedCardId = null;
+            }
+        });
+
+        window.onload = initGame;
+    </script>
+</body>
+</html>
